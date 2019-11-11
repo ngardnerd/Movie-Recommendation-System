@@ -20,12 +20,24 @@ TRANS <- read.transactions(
   rm.duplicates = TRUE
 )
 
+#################Arguments in recommend function##################
+###`likes` - a vector of one or more movies that an individual enjoys
+
+###`TRANS` - the transactional database which will be used to make recommendations 
+
+###`number` - the number of recommendations to make; default 15
+
+###`confidence` - the "confidence" of the recommendation (probability recommendation is "correct"); default 0.25
+
+###`popularity` - the *maximum* fraction (0-1) of users who "liked" to the movie; default 0.001
+
+###`all100conf` - returns all movies with 100% confidence if there are more than the number specified earlier
 
 ### recommend function
 recommend <- function(likes,TRANS,number=8,confidence=0.25,popularity=0.001, all100conf=FALSE) {
   require(arules)  #this loads up arules if it is not already loaded
   #All your code
-  #Make rules.  Executive decision:  rules must apply to at least 5 customers to be generated
+  #Make rules
 RULES <- apriori(TRANS,parameter = list(supp = 5/length(TRANS),conf=confidence,minlen=2,maxtime=0),
                  appearance = list(lhs=likes,default="rhs"),control=list(verbose=FALSE))
 #Remove non statistically significant rules
@@ -61,8 +73,9 @@ if (all100conf == FALSE)  {return(RESULTS)}
 if (all100conf == TRUE) {return(RESULTS2)}
 
 
-### Basic Shiny app I built for the recommendation engine. I would LOVE to learn more about this to make it look better. or hear your recommendations for improvement!
+### Basic Shiny app I built for the recommendation engine
 ### Make sure data is loaded before running app!
+### You will get an error at first, until you input your likes
 library(shiny)
 ui <- fluidPage(
   titlePanel("Movie Recommendation Engine"),
