@@ -1,0 +1,110 @@
+### Data can be found here: https://grouplens.org/datasets/movielens/latest/
+META <- read.csv("movies.csv",stringsAsFactors = FALSE)
+RATINGS <- read.csv("ratings.csv",stringsAsFactors = FALSE)
+
+#Make a dataframe with userID and title
+CARTS <- merge(RATINGS[,c("userId","movieId")],META[,c("movieId","title")],by="movieId")
+CARTS$movieId <- NULL
+
+#Make it look more market basket-y by calling it transaction ID and item
+names(CARTS) <- c("transactionID","item")
+write.csv(CARTS,file="moviecarts.csv")
+
+#Creating the Transactions
+TRANS <- read.transactions(
+  file = "moviecarts.csv",
+  format = "single",
+  header = TRUE,
+  sep = ",",
+  cols=c("transactionID","item"),
+  rm.duplicates = TRUE
+)
+
+
+### recommend function
+recommend <- function(likes,TRANS,number=8,confidence=0.25,popularity=0.001, all100conf=FALSE) {
+  require(arules)  #this loads up arules if it is not already loaded
+  #All your code
+  #Make rules.  Executive decision:  rules must apply to at least 5 customers to be generated
+RULES <- apriori(TRANS,parameter = list(supp = 5/length(TRANS),conf=confidence,minlen=2,maxtime=0),
+                 appearance = list(lhs=likes,default="rhs"),control=list(verbose=FALSE))
+#Remove non statistically significant rules
+RULES <- RULES[is.significant(RULES,TRANS)]
+#Convert into a dataframe the discovered rules
+RULESDF <- DATAFRAME(RULES, separate = TRUE, setStart = '', itemSep = ' + ', setEnd = '')
+
+#For each unique store that is recommended, find the highest level of confidence associatd with that recommendation
+A <- aggregate( confidence ~ RHS, data= RULESDF, FUN =max )
+#The above gives me the store name and confidence, but what about popularity?
+MOVIEDETAILS <- data.frame( Movie = names( itemFrequency(TRANS) ), Popularity = as.numeric(itemFrequency(TRANS) ) )
+#MOVIEDETAILS <- subset(MOVIEDETAILS, Popularity <= popularity)
+
+
+RESULTS <- merge(A,MOVIEDETAILS,by.x="RHS", by.y="Movie" )
+RESULTS <- RESULTS[order(RESULTS$confidence, decreasing = TRUE),]
+#RESULTS <- head(RESULTS, number)
+
+names(RESULTS) <- c("Movie","Confidence","Popularity")
+
+
+RESULTS <- subset(RESULTS,Popularity <= popularity)
+#I added this because sometimes I would get results with all 100% confidence. I could only see a few of them (and only the ones first alphabetically!). This allows the user to view all results with confidence equal to 100% if there are more results with confidence = 1 than the initial number. I'll show an example in the powerpoint
+if (length(RESULTS$Confidence[which(RESULTS$Confidence==1)]) > number) {RESULTS2 <- subset(RESULTS, Confidence == 1);row.names(RESULTS2) <- NULL;RESULTS2$Confidence <- paste( round( 100*RESULTS2$Confidence, digits=1 ), "%",sep="");RESULTS2$Popularity <-  paste( round( 100*RESULTS2$Popularity, digits=1 ), "%",sep="")}
+if (length(RESULTS$Confidence[which(RESULTS$Confidence==1)]) <= number) {RESULTS2 <-RESULTS;RESULTS2 <- head(RESULTS2, number);row.names(RESULTS2) <- NULL;RESULTS2$Confidence <- paste( round( 100*RESULTS2$Confidence, digits=1 ), "%",sep="");RESULTS2$Popularity <-  paste( round( 100*RESULTS2$Popularity, digits=1 ), "%",sep="")}
+RESULTS <- head(RESULTS, number)
+row.names(RESULTS) <- NULL
+
+RESULTS$Confidence <- paste( round( 100*RESULTS$Confidence, digits=1 ), "%",sep="")
+RESULTS$Popularity <-  paste( round( 100*RESULTS$Popularity, digits=1 ), "%",sep="")
+if( nrow(RESULTS) < number ) { warning("Number of recommendations with at least the desired level of confidence is less than the number requested") }
+if (all100conf == FALSE)  {return(RESULTS)}
+if (all100conf == TRUE) {return(RESULTS2)}
+
+
+### Basic Shiny app I built for the recommendation engine. I would LOVE to learn more about this to make it look better. or hear your recommendations for improvement!
+### Make sure data is loaded before running app!
+library(shiny)
+ui <- fluidPage(
+  titlePanel("Movie Recommendation Engine"),
+  sidebarPanel(
+    selectizeInput("MovieLikes","What Movies Do You Like?", choices = itemLabels(TRANS), options = list(maxOptions = 5), multiple = TRUE),
+    sliderInput("number","How Many Recommendations?", value =8, min = 1, max = 50, step = 1),
+    sliderInput("confidence", "Confidence",0,1, value = .75, step = .05),
+    numericInput("Popularity","Popularity",.01, min = 0, max = 1, step = .01),
+    checkboxInput("checkbox","Return All Movies With Confidence = 100?", value = FALSE),
+    submitButton("Update Recommendations", icon("refresh")),
+    tags$style(type="text/css", "
+           #loadmessage {
+             position: fixed;
+             top: 0px;
+             left: 0px;
+             width: 100%;
+             padding: 5px 0px 5px 0px;
+             text-align: center;
+             font-weight: bold;
+             font-size: 100%;
+             color: #000000;
+             background-color: #CCFF66;
+             z-index: 105;
+           }
+  "),
+  conditionalPanel(condition="$('html').hasClass('shiny-busy')",
+                            tags$div("Loading...",id="loadmessage"))
+  ),
+  mainPanel(
+    tableOutput("view")
+  )
+)
+
+server <- function(input, output, session) {
+ 
+  
+  output$view <- renderTable({recommend(likes = input$MovieLikes, TRANS, number = input$number, confidence = input$confidence, popularity = input$Popularity, all100conf = input$checkbox)})   
+  
+}
+
+shinyApp(ui, server)
+
+
+  
+}
