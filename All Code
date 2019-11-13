@@ -2,6 +2,8 @@
 META <- read.csv("movies.csv",stringsAsFactors = FALSE)
 RATINGS <- read.csv("ratings.csv",stringsAsFactors = FALSE)
 
+#Defining a "like" as a user rating a movie as 4.5 and above
+RATINGS <- subset(RATINGS,rating>=4.5)
 #Make a dataframe with userID and title
 CARTS <- merge(RATINGS[,c("userId","movieId")],META[,c("movieId","title")],by="movieId")
 CARTS$movieId <- NULL
@@ -71,7 +73,7 @@ RESULTS$Popularity <-  paste( round( 100*RESULTS$Popularity, digits=1 ), "%",sep
 if( nrow(RESULTS) < number ) { warning("Number of recommendations with at least the desired level of confidence is less than the number requested") }
 if (all100conf == FALSE)  {return(RESULTS)}
 if (all100conf == TRUE) {return(RESULTS2)}
-
+}
 
 ### Basic Shiny app I built for the recommendation engine
 ### Make sure data is loaded before running app!
@@ -120,4 +122,4 @@ shinyApp(ui, server)
 
 
   
-}
+
